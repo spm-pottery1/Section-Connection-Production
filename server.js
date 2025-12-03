@@ -1,0 +1,60 @@
+const express = require('express');
+const { Pool } = require('pg');
+const dashboardRouter = require('./api_dashboard'); // Import the router file
+
+const app = express();
+// CRITICAL FIX: Allow host to set port, default to 3000 locally
+const PORT = process.env.PORT || 3000;
+
+// --- 1. Database Configuration ---
+// IMPORTANT: Replace these environment variables with your actual PostgreSQL credentials.
+const dbConfig = {
+    user: process.env.DB_USER || 'postgres',
+    host: process.env.DB_HOST || 'localhost',
+    database: process.env.DB_NAME || 'section_connection_db',
+    password: process.env.DB_PASSWORD || 'mysecretpassword',
+    port: process.env.DB_PORT || 5432,
+};
+
+// Create a connection pool
+const pool = new Pool(dbConfig);
+
+// Test the database connection
+pool.connect()
+    .then(client => {
+        console.log('✅ Connected successfully to PostgreSQL database.');
+        client.release();
+    })
+    .catch(err => {
+        console.error('❌ Database connection error:', err.stack);
+        process.exit(1); // Exit if the connection fails
+    });
+
+// Make the database pool available as 'db' in the router
+const db = {
+    query: (text, params) => {
+        console.log('SQL Query:', text.substring(0, 40) + '...');
+        return pool.query(text, params);
+    }
+};
+
+// --- 2. Middleware Setup ---
+app.use(express.json()); // To parse incoming JSON requests
+
+// --- 3. Mount the Dashboard Router ---
+// Pass the database client instance (db) to the router function
+app.use('/', dashboardRouter(db)); 
+
+// Optional: Serve the HTML dashboard file directly (for development/demo)
+// You would replace this with a proper static file serving setup in production
+app.get('/', (req, res) => {
+    // NOTE: This assumes you have the admin_dashboard_integrated.html file saved locally
+    res.send('Your server is running! Access API endpoints like /api/dashboard/kpis');
+});
+
+
+// --- 4. Start the Server ---
+app.listen(PORT, () => {
+    console.log(`🚀 Server running on http://localhost:${PORT}`);
+    console.log('API routes are available under /api/dashboard/*');
+});
